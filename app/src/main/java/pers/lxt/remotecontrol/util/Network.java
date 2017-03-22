@@ -11,21 +11,14 @@ import android.util.Log;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.lang.reflect.Array;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.net.SocketException;
-import java.nio.Buffer;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
@@ -40,7 +33,6 @@ public class Network {
 	private static PrintWriter writer=null;
 	private static BufferedReader reader=null;
 	private static Queue<byte[]> imgBuffer;
-	private static DatagramSocket server = null;
 
 	public static void setCursorPos(int x,int y){
 		if(writer!=null){
@@ -84,13 +76,6 @@ public class Network {
 		}
 	}
 
-	public static void reset(){
-		if(writer!=null){
-			writer.println("reset,");
-			writer.flush();
-		}
-	}
-
 	public static void close(){
 		if(writer!=null)
 			writer.close();
@@ -108,7 +93,7 @@ public class Network {
 		try {
 			gzi = new GZIPInputStream(new ByteArrayInputStream(buf));
 			bos = new ByteArrayOutputStream(buf.length);
-			int count = 0;
+			int count;
 			byte[] tmp = new byte[2048];
 			while ((count = gzi.read(tmp)) != -1) {
 				bos.write(tmp, 0, count);
@@ -136,6 +121,7 @@ public class Network {
 	public static void startRecv(){
 		imgBuffer=new LinkedList<>();
 		new Thread(new Runnable() {
+			@SuppressWarnings("InfiniteLoopStatement")
 			@Override
 			public void run() {
 				while(true){
@@ -151,7 +137,7 @@ public class Network {
 		}).start();
 	}
 
-	public static String getLocalIpAddress() {
+	private static String getLocalIpAddress() {
         try {   
         	String ip="192.168.1.100";
             for (Enumeration<NetworkInterface> en = NetworkInterface
@@ -161,9 +147,9 @@ public class Network {
                         .getInetAddresses(); enumIpAddr.hasMoreElements();) {   
                     InetAddress inetAddress = enumIpAddr.nextElement();
                     if (!inetAddress.isLoopbackAddress()) {
-                    	Log.i("ip", inetAddress.getHostAddress().toString());
-						if(!inetAddress.getHostAddress().toString().contains(":"))
-                        	ip=inetAddress.getHostAddress().toString();
+                    	Log.i("ip", inetAddress.getHostAddress());
+						if(!inetAddress.getHostAddress().contains(":"))
+                        	ip= inetAddress.getHostAddress();
                     }   
                 }   
             }
@@ -177,10 +163,14 @@ public class Network {
 	
 	private static int totalCount=0;
 	
-	public static void search(final Context context, final List<String> list) {
+	public static void search(final List<String> list) {
 		final String myIp;
 		String host=getLocalIpAddress();
-		myIp=host.substring(0, host.lastIndexOf(".")+1);
+		if (host != null) {
+			myIp=host.substring(0, host.lastIndexOf(".")+1);
+		}else{
+			myIp = "192.168.1.";
+		}
 		Log.i("cardinal", myIp);
 		final Thread curThread= Thread.currentThread();
 		while(true){
@@ -200,12 +190,12 @@ public class Network {
 								Log.i("check", myIp + i + " available!");
 								if(!list.contains(socket.getInetAddress().getHostAddress())){
 									list.add(socket.getInetAddress().getHostAddress());
-									MainActivity.handler.sendEmptyMessage(MainActivity.Msg.UPDATE_LIST.ordinal());
+									MainActivity.handler.sendEmptyMessage(MainActivity.MessageType.UPDATE_LIST);
 								}
 							} catch (IOException e) {
 								if(list.contains(myIp + i)){
 									list.remove(myIp + i);
-									MainActivity.handler.sendEmptyMessage(MainActivity.Msg.UPDATE_LIST.ordinal());
+									MainActivity.handler.sendEmptyMessage(MainActivity.MessageType.UPDATE_LIST);
 								}
 							} finally {
 								if(socket!=null)
@@ -234,12 +224,9 @@ public class Network {
 	
 	public static boolean isWifiConnected(Context context) {
         ConnectivityManager connectivityManager = (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo wifiNetworkInfo = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-        if(wifiNetworkInfo.isConnected()) {
-            return true ;
-        }
-        return false ;
-    }
+        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+		return networkInfo != null&&networkInfo.isConnected()&&networkInfo.getType()==ConnectivityManager.TYPE_WIFI;
+	}
 	
 	public static boolean link(String ip, String password){
 		close();
@@ -259,12 +246,9 @@ public class Network {
 				Network.reader=reader;
 				return true;
 			}else{
-				if(writer!=null)
-					writer.close();
-				if(reader!=null)
-					reader.close();
-				if(socket!=null)
-					socket.close();
+				writer.close();
+				reader.close();
+				socket.close();
 				return false;
 			}
 		} catch (IOException e) {

@@ -2,16 +2,15 @@ package pers.lxt.remotecontrol.activity;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
-import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -19,11 +18,11 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -35,62 +34,77 @@ import pers.lxt.remotecontrol.util.NetworkStatusReceiver;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static Context context;
-    private static Thread thread;
-    private static List<String> list;
-    private static ArrayAdapter<String> adapter;
-    private static ProgressDialog proDialog=null;
-    private static Button btn;
-    private static boolean isAnimOngoing=true;
+    private Button btn;
 
-    public enum Msg{
-        STOP_THREAD,SEND_MESSAGE,UPDATE_LIST,NETWORK_CHANGE
+    private Thread thread;
+    private List<String> list;
+    private ArrayAdapter<String> adapter;
+    private ProgressDialog proDialog=null;
+    private boolean isAnimOngoing=true;
+
+    public static abstract class MessageType {
+        static final int STOP_THREAD = 0;
+        static final int SEND_MESSAGE = 1;
+        public static final int UPDATE_LIST = 2;
+        public static final int NETWORK_CHANGE = 3;
     }
 
     public static Handler handler=new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
-            if(msg.what==Msg.STOP_THREAD.ordinal()&&thread!=null){
-                thread.interrupt();
-            }else if(msg.what==Msg.SEND_MESSAGE.ordinal()){
-                Toast.makeText(context, (String) msg.obj, Toast.LENGTH_SHORT).show();
-            }else if(msg.what==Msg.UPDATE_LIST.ordinal()){
-                adapter.notifyDataSetChanged();
-            }else if(msg.what==Msg.NETWORK_CHANGE.ordinal()){
-                if(btn!=null){
-                    boolean flag= (boolean) msg.obj;
-                    btn.setEnabled(flag);
-                    if(flag){
-                        btn.setBackgroundResource(R.drawable.round_button_shape);
-                    }else{
-                        btn.setBackgroundResource(R.drawable.round_button_shape_invalid);
-                        isAnimOngoing=false;
-                        btn.clearAnimation();
+            switch (msg.what){
+                case MessageType.STOP_THREAD:{
+                    Thread thread = (Thread) msg.obj;
+                    if(thread!=null)
+                        thread.interrupt();
+                }break;
+
+                case MessageType.SEND_MESSAGE:{
+                    Context context = (Context) msg.obj;
+                    Toast.makeText(context, msg.getData().getString("msg"), Toast.LENGTH_SHORT).show();
+                }break;
+
+                case MessageType.UPDATE_LIST:{
+                    BaseAdapter adapter = (BaseAdapter) msg.obj;
+                    adapter.notifyDataSetChanged();
+                }break;
+
+                case MessageType.NETWORK_CHANGE:{
+                    MainActivity context = (MainActivity) msg.obj;
+                    if(context.btn!=null){
+                        boolean flag= msg.arg1==1;
+                        context.btn.setEnabled(flag);
+                        if(flag){
+                            context.btn.setBackgroundResource(R.drawable.round_button_shape);
+                        }else{
+                            context.btn.setBackgroundResource(R.drawable.round_button_shape_invalid);
+                            context.isAnimOngoing=false;
+                            context.btn.clearAnimation();
+                        }
                     }
-                }
+                }break;
             }
+
             return false;
         }
     });
-
-    private NetworkStatusReceiver networkStatusReceiver=new NetworkStatusReceiver();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        NetworkStatusReceiver networkStatusReceiver = new NetworkStatusReceiver(this);
         registerReceiver(networkStatusReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
-        context=this;
         final ListView listView= (ListView) findViewById(R.id.listView);
         list=new ArrayList<>();
-        adapter= new ArrayAdapter<>(context, android.R.layout.simple_list_item_1, list);
+        adapter= new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, list);
         listView.setAdapter(adapter);
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View v, final int position, long id) {
                 final String ip = list.get(position);
-                final View view = View.inflate(context, R.layout.password_check, new LinearLayout(context));
-                new AlertDialog.Builder(context)
+                final View view = View.inflate(MainActivity.this, R.layout.password_check, new LinearLayout(MainActivity.this));
+                new AlertDialog.Builder(MainActivity.this)
                         .setView(view)
                         .setTitle("输入密码")
                         .setCancelable(true)
@@ -105,27 +119,26 @@ public class MainActivity extends AppCompatActivity {
 
                             @Override
                             public void onClick(final DialogInterface dialog, int which) {
-                                proDialog = new ProgressDialog(context);
+                                proDialog = new ProgressDialog(MainActivity.this);
                                 proDialog.setCancelable(true);
-                                proDialog.setCanceledOnTouchOutside(false);
                                 proDialog.setIndeterminate(true);
                                 proDialog.setMessage("请确保另一台设备输入了相同的密码...");
                                 proDialog.setTitle("正在连接");
-                                proDialog.setCancelMessage(handler.obtainMessage(Msg.STOP_THREAD.ordinal()));
+                                proDialog.setCancelMessage(handler.obtainMessage(MessageType.STOP_THREAD,thread));
                                 proDialog.show();
                                 thread = new Thread() {
                                     public void run() {
                                         if (Network.link(ip, ((EditText) view.findViewById(R.id.password)).getText().toString())) {
                                             proDialog.dismiss();
-                                            handler.sendMessage(handler.obtainMessage(Msg.SEND_MESSAGE.ordinal(), "连接成功"));
+                                            showToast(MainActivity.this,"连接成功");
                                             list.clear();
-                                            handler.sendMessage(handler.obtainMessage(Msg.UPDATE_LIST.ordinal()));
-                                            Intent intent = new Intent(context, ControlActivity.class);
+                                            handler.obtainMessage(MessageType.UPDATE_LIST, adapter).sendToTarget();
+                                            Intent intent = new Intent(MainActivity.this, ControlActivity.class);
                                             startActivity(intent);
                                             dialog.dismiss();
                                         } else {
                                             proDialog.dismiss();
-                                            handler.sendMessage(handler.obtainMessage(Msg.SEND_MESSAGE.ordinal(), "拒绝连接"));
+                                            showToast(MainActivity.this,"拒绝连接");
                                             dialog.dismiss();
                                         }
                                     }
@@ -179,27 +192,27 @@ public class MainActivity extends AppCompatActivity {
                     btn.startAnimation(zoom);
                     list.clear();
                     adapter.notifyDataSetChanged();
-                    searching(adapter);
+                    searching();
                 }else if(event.getAction()==MotionEvent.ACTION_UP){
                     isAnimOngoing=false;
                     btn.clearAnimation();
-                    handler.sendMessage(handler.obtainMessage(Msg.STOP_THREAD.ordinal()));
+                    handler.sendMessage(handler.obtainMessage(MessageType.STOP_THREAD));
                 }
                 return true;
             }
         });
     }
 
-    private static void searching(final ArrayAdapter<String> adapter){
-        if(Network.isWifiConnected(context)){
+    private void searching(){
+        if(Network.isWifiConnected(this)){
             thread=new Thread(){
                 public void run(){
-                    Network.search(context,list);
+                    Network.search(list);
                 }
             };
             thread.start();
         }else{
-            Toast.makeText(context, "请打开WIFI", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "请打开WIFI", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -209,6 +222,14 @@ public class MainActivity extends AppCompatActivity {
             System.exit(0);
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    public static void showToast(Context context,String msg){
+        Message message = handler.obtainMessage(MessageType.SEND_MESSAGE, context);
+        Bundle bundle = new Bundle();
+        bundle.putString("msg",msg);
+        message.setData(bundle);
+        message.sendToTarget();
     }
 
 }

@@ -12,12 +12,8 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 
-import pers.lxt.remotecontrol.activity.ControlActivity;
 import pers.lxt.remotecontrol.util.Network;
 
-/**
- * Created by MissingNo on 2017/3/15.
- */
 public class ClickPad  extends SurfaceView implements SurfaceHolder.Callback{
 
     static {
@@ -27,6 +23,7 @@ public class ClickPad  extends SurfaceView implements SurfaceHolder.Callback{
     private Point last=new Point();
     private SurfaceHolder holder;
     private int touchCount=0;
+    private int movingSpeed = 5;
 
     public ClickPad(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -59,8 +56,8 @@ public class ClickPad  extends SurfaceView implements SurfaceHolder.Callback{
                             if (vector.x != 0 && vector.y != 0) {
                                 new Thread() {
                                     public void run() {
-                                        Network.setCursorPos(vector.x / ControlActivity.movingSpeed, vector.y / ControlActivity.movingSpeed);
-                                        Log.i("cursor", vector.x / ControlActivity.movingSpeed + "," + vector.y / ControlActivity.movingSpeed);
+                                        Network.setCursorPos(vector.x / movingSpeed, vector.y / movingSpeed);
+                                        Log.i("cursor", vector.x / movingSpeed + "," + vector.y / movingSpeed);
                                     }
                                 }.start();
                             } else {
