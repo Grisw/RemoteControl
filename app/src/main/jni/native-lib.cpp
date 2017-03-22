@@ -1,12 +1,11 @@
 #include <jni.h>
 #include <android/bitmap.h>
 
-#define uchar unsigned char
-
 #define TAG "native-lib"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,TAG,__VA_ARGS__)
 
-uchar* lastFrame;
+int* lastFrame;
+int lastSize = -1;
 
 extern "C"{
     JNIEXPORT void JNICALL
@@ -15,11 +14,12 @@ extern "C"{
 
         AndroidBitmapInfo bmpInfo={0};
         AndroidBitmap_getInfo(env,bmp,&bmpInfo);
-        uchar* data=NULL;
+        int* data=NULL;
         AndroidBitmap_lockPixels(env,bmp,(void**)&data);
-        int size = bmpInfo.width*bmpInfo.height*4;
-        if (lastFrame == NULL || id==0) {
-            lastFrame = new uchar[size]();
+        int size = bmpInfo.width*bmpInfo.height;
+        if (lastFrame == NULL || id==0 || lastSize != size) {
+            lastSize = size;
+            lastFrame = new int[size]();
             for(int i = 0;i<size;i++){
                 lastFrame[i] = data[i];
             }

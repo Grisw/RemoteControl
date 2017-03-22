@@ -119,6 +119,10 @@ public class MainActivity extends AppCompatActivity {
 
                             @Override
                             public void onClick(final DialogInterface dialog, int which) {
+                                if(((EditText) view.findViewById(R.id.password)).getText().toString().isEmpty()){
+                                    showToast(MainActivity.this,"输入点什么");
+                                    return;
+                                }
                                 proDialog = new ProgressDialog(MainActivity.this);
                                 proDialog.setCancelable(true);
                                 proDialog.setIndeterminate(true);
@@ -196,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
                 }else if(event.getAction()==MotionEvent.ACTION_UP){
                     isAnimOngoing=false;
                     btn.clearAnimation();
-                    handler.sendMessage(handler.obtainMessage(MessageType.STOP_THREAD));
+                    handler.obtainMessage(MessageType.STOP_THREAD, thread).sendToTarget();
                 }
                 return true;
             }
@@ -207,7 +211,7 @@ public class MainActivity extends AppCompatActivity {
         if(Network.isWifiConnected(this)){
             thread=new Thread(){
                 public void run(){
-                    Network.search(list);
+                    Network.search(list, adapter);
                 }
             };
             thread.start();

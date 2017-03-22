@@ -7,6 +7,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.util.Base64;
 import android.util.Log;
+import android.widget.BaseAdapter;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -163,7 +164,7 @@ public class Network {
 	
 	private static int totalCount=0;
 	
-	public static void search(final List<String> list) {
+	public static void search(final List<String> list, final BaseAdapter adapter) {
 		final String myIp;
 		String host=getLocalIpAddress();
 		if (host != null) {
@@ -190,12 +191,12 @@ public class Network {
 								Log.i("check", myIp + i + " available!");
 								if(!list.contains(socket.getInetAddress().getHostAddress())){
 									list.add(socket.getInetAddress().getHostAddress());
-									MainActivity.handler.sendEmptyMessage(MainActivity.MessageType.UPDATE_LIST);
+									MainActivity.handler.obtainMessage(MainActivity.MessageType.UPDATE_LIST, adapter).sendToTarget();
 								}
 							} catch (IOException e) {
 								if(list.contains(myIp + i)){
 									list.remove(myIp + i);
-									MainActivity.handler.sendEmptyMessage(MainActivity.MessageType.UPDATE_LIST);
+									MainActivity.handler.obtainMessage(MainActivity.MessageType.UPDATE_LIST, adapter).sendToTarget();
 								}
 							} finally {
 								if(socket!=null)
